@@ -7,6 +7,7 @@ from kvstore import KVStore
 
 DB_FILE = "db.json"
 TMP_FILE = "db.json.tmp"
+WAL_FILE = "wal.json"
 
 
 def clean():
@@ -25,13 +26,13 @@ def read_json(path):
 def test_clean_restart():
     clean()
 
-    db = KVStore(DB_FILE)
+    db = KVStore(DB_FILE, WAL_FILE)
     db.put("A", 1)
     db.put("B", 2)
 
     del db
 
-    db2 = KVStore(DB_FILE)
+    db2 = KVStore(DB_FILE, WAL_FILE)
     assert db2.get("A") == 1
     assert db2.get("B") == 2
 
@@ -41,7 +42,7 @@ def test_clean_restart():
 def test_snapshot_always_valid_json():
     clean()
 
-    db = KVStore(DB_FILE)
+    db = KVStore(DB_FILE, WAL_FILE)
 
     for i in range(50):
         db.put(f"k{i}", i)
@@ -59,7 +60,7 @@ def test_temp_file_ignored():
     with open(TMP_FILE, "w") as f:
         f.write("{ this is garbage")
 
-    db = KVStore(DB_FILE)
+    db = KVStore(DB_FILE, WAL_FILE)
 
     assert db.get("A") == 1
 
@@ -87,7 +88,7 @@ db.put("B", 2)
     p.kill()
     p.wait()
 
-    db = KVStore(DB_FILE)
+    db = KVStore(DB_FILE, WAL_FILE)
 
     a = db.get("A")
     b = db.get("B")
@@ -123,7 +124,7 @@ db.delete("A")
     p.kill()
     p.wait()
 
-    db = KVStore(DB_FILE)
+    db = KVStore(DB_FILE, WAL_FILE)
 
     assert db.get("A") in (None, 1)
 
@@ -133,7 +134,7 @@ db.delete("A")
 def test_main_file_not_partial():
     clean()
 
-    db = KVStore(DB_FILE)
+    db = KVStore(DB_FILE, WAL_FILE)
     db.put("A", 1)
 
     with open(DB_FILE, "rb") as f:
@@ -148,11 +149,11 @@ def test_main_file_not_partial():
 def test_startup_without_temp():
     clean()
 
-    db = KVStore(DB_FILE)
+    db = KVStore(DB_FILE, WAL_FILE)
     db.put("A", 1)
 
     if os.path.exists(TMP_FILE):
         os.remove(TMP_FILE)
 
-    db2 = KVStore(DB_FILE)
+    db2 = KVStore(DB_FILE, WAL_FILE)
     assert db2.get("A") == 1

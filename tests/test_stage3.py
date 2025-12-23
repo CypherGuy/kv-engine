@@ -28,7 +28,7 @@ def test_concurrent_writes_no_loss():
     - Final state reflects some serial ordering of writes
     """
 
-    db = KVStore("db.json")
+    db = KVStore("db.json", "wal.json")
 
     def writer(i):
         db.put("counter", i)
@@ -59,7 +59,7 @@ def test_reader_never_sees_partial_state():
     - Reads are synchronized with writers
     """
 
-    db = KVStore("db.json")
+    db = KVStore("db.json", "wal.json")
     db.put("A", 0)
 
     stop = False
@@ -101,7 +101,7 @@ def test_put_delete_race():
     - no mixed or impossible states occur
     """
 
-    db = KVStore("db.json")
+    db = KVStore("db.json", "wal.json")
     db.put("A", 1)
 
     def putter():
@@ -136,7 +136,7 @@ def test_read_does_not_observe_uncommitted_state():
     - Read happens either before or after the write, never during
     """
 
-    db = KVStore("db.json")
+    db = KVStore("db.json", "wal.json")
     results = []
 
     def writer():
@@ -169,7 +169,7 @@ def test_no_deadlock_under_load():
     - No deadlock or permanent blocking occurs
     """
 
-    db = KVStore("db.json")
+    db = KVStore("db.json", "wal.json")
 
     def worker(i):
         for _ in range(10):
