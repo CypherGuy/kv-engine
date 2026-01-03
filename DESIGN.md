@@ -7,6 +7,7 @@
 - Adopt a linearizable system
   - Linearizability is the way that concurrent operations appear to be executed one by one, in an order that reflects real-time ordering
 - Keep the design intentionally single-process and simple
+- Reduce crash recovery time without weakening durability guarantees
 
 ---
 
@@ -20,6 +21,8 @@
 
 - The on-disk file always represents a **fully committed snapshot**
 - The main database file is **either fully written or not at all**
+- Recovery always reconstructs the state as:
+  snapshot + WAL replay (from checkpoint offset)
 - At any given time, In-memory state and on-disk state are the same
 - These are never allowed:
   - A partially applied change
@@ -53,7 +56,21 @@ Having this guarantees crash safety without needing Journals or Recovery logs
 
 ---
 
-## 4. Concurrency Model and Linearizability
+## 4. Checkpointing
+
+Checkpoints are performed every N mutations. A checkpoint in this case consists of:
+
+- Writing a snapshot of in-memory state
+
+and then
+
+- Recording the WAL byte offset covered by that snapshot
+
+Checkpoint metadata is written atomically. Doing this also reduces recovery time by limiting how much of the WAL needs to be replayed.
+
+---
+
+## 5. Concurrency Model and Linearizability
 
 ### Concurrency model
 
@@ -71,7 +88,7 @@ Additionally, both reads and writes are synchronised, meaning that operations ca
 
 Each operation has something called a linearizability point in which the operation is executed. When this happens,the operation will appear to be executed atomically. With all these operations haiving linearizability points, if all the operations's linearizability points are in the same order as the operations are executed, then the system is linearizable.
 
-## 5. Concurrency vs Durability
+## 6. Concurrency vs Durability
 
 Concurrency is the process of having multiple threads execute simultaneously on the same process. In this project, concurrency is achieved by ensuring only one process is acted on at a time, and that operations don't mix, leading to a confliced file state that might be midwrite.
 
@@ -91,7 +108,7 @@ Durability on the other hand is about what happens when the system crashes. In t
 
 ---
 
-## 6. Trade-offs and Non-Goals
+## 7. Trade-offs and Non-Goals
 
 ### Coarse-grained mutual exclusion
 
@@ -112,19 +129,23 @@ These are deferred until correctness foundations are firmly established.
 
 ---
 
-## 7. What to do next
+## 8. What to do next
 
-### Write-Ahead Logging (WAL)
+### Stage 6 — Performance Measurement and Durability Analysis
 
-- WAL would decouple durability from full snapshot rewrites
-- The core invariants would remain unchanged
-- New complexity would be introduced around:
+This stage introduces benchmarking, without changing the correctness or recovery logic. The goal is to understand the real costs of the guarantees established in earlier stages (so I can explain tradeoffs better in interviews if I'm ever asked too).
 
-  - Log replay
-  - Ordering guarantees
-  - Truncation
+Work in this stage includes:
 
----
+- Measuring end-to-end latency using a monotonic clock
+- Recording put latency distributions (p50, p95, p99)
+- Measuring get latency under steady state
+- Measuring recovery time as WAL size grows
+- Tracking WAL growth over time relative to checkpoint frequency
+- Comparing fsync-per-write versus batched fsync strategies
+- Explicitly documenting durability assumptions (disk, OS, filesystem)
+
+This stage exists to help inform future optimisations I might do, but we don't make any new design choices.
 
 ## Final note
 
