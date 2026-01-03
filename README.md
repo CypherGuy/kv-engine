@@ -79,6 +79,16 @@ This stage guarantees **linearizable behaviour** under concurrent access within 
 
 This stage focuses on **durability, write ordering and recovery from a crash** without needing to write an entire snapshot each time.
 
+## Stage 5 — Snapshot checkpointing
+
+- Snapshots are now treated as explicit checkpoints that end up being written atomically
+- A checkpoint metadata file records the WAL byte offset after the most recent snapshot
+- On restart, WAL replay begins after the last checkpoint offset, not from the start, meaning recovery time is proportional to how much the WALfile has changed since the last checkpoint, not the entire history
+  - Corrupted WAL suffixes beyond the checkpoint are safely ignored
+  - WAL replays are idempotent
+
+This stage focuses on **decreasing recovery time**.
+
 ## Current Guarantees
 
 | Category                         | Guaranteed at this stage? | Notes                                                                           |
@@ -95,20 +105,23 @@ This stage focuses on **durability, write ordering and recovery from a crash** w
 | Write ordering guarantees        | ✅                        | WAL preserves changes order                                                     |
 | History preservation             | ✅                        | All acknowledged writes survive crashes                                         |
 | Partial-write tolerance          | ✅                        | Truncated or corrupted WAL suffixes are safely ignored                          |
+| Bounded recovery time            | ✅                        | WAL replay starts after last checkpoint                                         |
+| WALfile compaction               | ✅                        | WALfile is compacted on each checkpoint                                         |
 | Performance guarantees           | ❌                        | WAL fsync on every write; no batching                                           |
 | Transactions                     | ❌                        | Single-key operations only                                                      |
 | Asynchronous writes              | ❌                        | Writes are synchronous and blocking                                             |
-| Log compaction                   | ❌                        | WAL grows unbounded without truncation                                          |
 | Background flushing              | ❌                        | Snapshots are not generated incrementally                                       |
 
 ---
 
 ## Design Notes (Persistence & Storage)
 
-- Persistence is implemented via Write-ahead logging
-- Memory, upon startup, is derived from the most recent snapshot and the walfile
-  - As a result snapshots are almost like checkpoints
-- The order is: put/delete -> walfile modified -> flush/fsync -> modify tempfile -> rename tempfile to mainfile
+- Persistence is implemented via Write-ahead logging. Snapshots act as checkpoints, not as the primary source of truth
+- On startup:
+  - Snapshot is loaded from disk
+  - WAL is replayed from the snapshot offset to the end
+  - In-memory state is reconstructed from the snapshot + WAL
+- The order of writing to the store is: callin put/delete -> walfile modified -> flush/fsync -> modify tempfile -> rename tempfile to mainfile -> update checkpoint if needed
 
 ---
 
@@ -139,9 +152,15 @@ print(db.get("A"))  # None
 
 ## Next Step
 
-The next stage introduces **snapshot checkpointing** on top of our current write-ahead logging. Right now snapshots exist but they aren't treated as actual checkpoints, and the WAL gets replayed from the beginning no matter how many records there are.
+The next stage focuses on **measureing performance**, not adding new functionality. Stage 6 introduces benchmarking, including checking things like:
 
-At stage 4, if we have to recover say 10 million records we have to start from transaction 1 and go all the way up. With stage 5, we set up checkpointing at certain points and 'reset' what we had saved before in terms of records written by WAL. This would mean we only have to start from the last checkpoint.
+- Measuring read/write latency (p50, p95, p99)
+- Measuring recovery time as WAL grows
+- Tracking WAL growth relative to checkpoint frequency
+- Comparing fsync-per-write vs batched fsync
+- Documenting durability assumptions
+
+Nothing to do with how the store keeps its state in memory, how persistence works etc.. will change in the next stage.
 
 ---
 
@@ -155,3 +174,5 @@ At stage 4, if we have to recover say 10 million records we have to start from t
 - [https://www.architecture-weekly.com/p/the-write-ahead-log-a-foundation](https://www.architecture-weekly.com/p/the-write-ahead-log-a-foundation) to learn about write-ahead logging
 - [https://medium.com/@vinciabhinav7/write-ahead-logs-but-why-494c3efd722d](https://medium.com/@vinciabhinav7/write-ahead-logs-but-why-494c3efd722d) to understand why use WAL in the first place
 - `System Design Interview An Insider’s Guide by Alex Yu.pdf`, chapter 6 in particular to learn about standards for building a key-value store
+- [https://medium.com/@jatinumamtora/a-deep-dive-into-write-ahead-logging-wal-in-database-engines-recovery-71f6d98f0e23](https://medium.com/@jatinumamtora/a-deep-dive-into-write-ahead-logging-wal-in-database-engines-recovery-71f6d98f0e23) to better understand how to use checkpointing/ARIES
+- [https://www.systemdesignhandbook.com/guides/design-a-key-value-store/#2-snapshots-and-checkpointing](https://www.systemdesignhandbook.com/guides/design-a-key-value-store/#2-snapshots-and-checkpointing) to gain a better understanding of how a key-value store is meant to work, including snapshots and checkpointing
