@@ -89,7 +89,46 @@ This stage focuses on **durability, write ordering and recovery from a crash** w
 
 This stage focuses on **decreasing recovery time**.
 
-## Current Guarantees
+## Stage 6 - Performance Testing
+
+- Measuring end-to-end latency using a monotonic clock
+- Recording put latency distributions (p50, p95, p99)
+- No changes to actual functionality
+
+This stage focuses on **measuring performance**.
+
+# Performance results
+
+Below you can see two tables regarding the performance of the program. The first table shows the latency of each key operation. The second shows the p1,50 and 99 of the operations.
+
+### Pytest Benchmarking
+
+| Name                | Min (ns)             | Max (ns)                 | Mean (ns)              | StdDev (ns)            | Median (ns)          | IQR (ns)             | Outliers  | OPS (Kops/s) | Rounds  | Iterations |
+| ------------------- | -------------------- | ------------------------ | ---------------------- | ---------------------- | -------------------- | -------------------- | --------- | ------------ | ------- | ---------- |
+| test_get_latency    | 174.3707 (1.0)       | 50,026.2206 (1.0)        | 224.5733 (1.0)         | 126.0082 (1.0)         | 220.6652 (1.0)       | 18.5532 (1.0)        | 2130;3935 | 4,452.8888   | 195,122 | 27         |
+| test_put_latency    | 25,458.9831 (146.00) | 1,790,000.0094 (35.78)   | 214,571.3537 (955.46)  | 387,432.6197 (>1000.0) | 36,625.0169 (165.98) | 10,499.9635 (565.94) | 650;787   | 4.6605       | 3,910   | 1          |
+| test_delete_latency | 29,625.0219 (169.90) | 38,867,915.9805 (776.95) | 257,314.1452 (>1000.0) | 715,234.9094 (>1000.0) | 36,999.9907 (167.67) | 7,583.0030 (408.72)  | 1631;3975 | 3.8863       | 19,786  | 1          |
+
+Legend:
+
+- Outliers: 1 Standard Deviation from Mean; 1.5 IQR (InterQuartile Range) from 1st Quartile and 3rd Quartile.
+- OPS: Operations Per Second, computed as 1 / Mean
+
+These tests can be found in tests/test_benchmarking.py
+
+### Latency Percentiles (nanoseconds)
+
+| Operation | p1        | p50       | p99          | Max           | Iterations |
+| --------- | --------- | --------- | ------------ | ------------- | ---------- |
+| GET       | 211 ns    | 229 ns    | 260 ns       | 1,489 ns      | 198,373    |
+| PUT       | 28,208 ns | 37,042 ns | 1,042,404 ns | 1,850,166 ns  | 2,336      |
+| DELETE    | 32,874 ns | 37,833 ns | 3,111,150 ns | 42,740,790 ns | 22,202     |
+
+Total processing time: around 0.219 seconds
+
+More information can be found in DESIGN.md.
+
+## Current Guarantees and limitations
 
 | Category                         | Guaranteed at this stage? | Notes                                                                           |
 | -------------------------------- | ------------------------- | ------------------------------------------------------------------------------- |
@@ -105,12 +144,11 @@ This stage focuses on **decreasing recovery time**.
 | Write ordering guarantees        | ✅                        | WAL preserves changes order                                                     |
 | History preservation             | ✅                        | All acknowledged writes survive crashes                                         |
 | Partial-write tolerance          | ✅                        | Truncated or corrupted WAL suffixes are safely ignored                          |
-| Bounded recovery time            | ✅                        | WAL replay starts after last checkpoint                                         |
-| WALfile compaction               | ✅                        | WALfile is compacted on each checkpoint                                         |
+| Reduced recovery time            | ✅                        | WAL replay starts after last checkpoint                                         |
 | Performance guarantees           | ❌                        | WAL fsync on every write; no batching                                           |
 | Transactions                     | ❌                        | Single-key operations only                                                      |
 | Asynchronous writes              | ❌                        | Writes are synchronous and blocking                                             |
-| Background flushing              | ❌                        | Snapshots are not generated incrementally                                       |
+| Background flushing              | ❌                        | Snapshots are not generated in the background incrementally                     |
 
 ---
 
@@ -136,7 +174,7 @@ print(db.get("A"))  # None
 
 ---
 
-## Out of Scope at this stage
+## Out of Scope
 
 - Fine-grained or lock-free concurrency
   - We've made a single owner, coarse grained locking system
@@ -150,20 +188,6 @@ print(db.get("A"))  # None
 
 ---
 
-## Next Step
-
-The next stage focuses on **measureing performance**, not adding new functionality. Stage 6 introduces benchmarking, including checking things like:
-
-- Measuring read/write latency (p50, p95, p99)
-- Measuring recovery time as WAL grows
-- Tracking WAL growth relative to checkpoint frequency
-- Comparing fsync-per-write vs batched fsync
-- Documenting durability assumptions
-
-Nothing to do with how the store keeps its state in memory, how persistence works etc.. will change in the next stage.
-
----
-
 ## Resources Used
 
 - [https://www.geeksforgeeks.org/python/python-os-fsync-method/](https://www.geeksforgeeks.org/python/python-os-fsync-method/) to learn about fsync() and how to use it with file objects
@@ -174,5 +198,6 @@ Nothing to do with how the store keeps its state in memory, how persistence work
 - [https://www.architecture-weekly.com/p/the-write-ahead-log-a-foundation](https://www.architecture-weekly.com/p/the-write-ahead-log-a-foundation) to learn about write-ahead logging
 - [https://medium.com/@vinciabhinav7/write-ahead-logs-but-why-494c3efd722d](https://medium.com/@vinciabhinav7/write-ahead-logs-but-why-494c3efd722d) to understand why use WAL in the first place
 - `System Design Interview An Insider’s Guide by Alex Yu.pdf`, chapter 6 in particular to learn about standards for building a key-value store
-- [https://medium.com/@jatinumamtora/a-deep-dive-into-write-ahead-logging-wal-in-database-engines-recovery-71f6d98f0e23](https://medium.com/@jatinumamtora/a-deep-dive-into-write-ahead-logging-wal-in-database-engines-recovery-71f6d98f0e23) to better understand how to use checkpointing/ARIES
+- [https://medium.com/@jatinumamtora/a-deep-dive-into-write-ahead-logging-wal-in-database-engines-recovery-71f6d98f0e23](https://medium.com/@jatinumamtora/a-deep-dive-into-write-ahead-logging-wal-in-database-engines-recovery-71f6d98f0e23) and [https://blog.algomaster.io/p/designing-a-distributed-key-value-store](https://blog.algomaster.io/p/designing-a-distributed-key-value-store) to better understand how to use checkpointing/ARIES
 - [https://www.systemdesignhandbook.com/guides/design-a-key-value-store/#2-snapshots-and-checkpointing](https://www.systemdesignhandbook.com/guides/design-a-key-value-store/#2-snapshots-and-checkpointing) to gain a better understanding of how a key-value store is meant to work, including snapshots and checkpointing
+- Pytest docs to learn about using fixtures and pytest-benchmark

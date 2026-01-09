@@ -129,23 +129,46 @@ These are deferred until correctness foundations are firmly established.
 
 ---
 
-## 8. What to do next
+## 8. Observed Latency Characteristics
 
-### Stage 6 — Performance Measurement and Durability Analysis
+In order to test benchmarking I opted to continue using pytest and used `pytest-benchmark==5.2.3` to measure latencies. As this didn't work out things like each functions p1,50 and 99, I created a script to work these out too. I'll quickly put the graphs then explain what I take from this.
 
-This stage introduces benchmarking, without changing the correctness or recovery logic. The goal is to understand the real costs of the guarantees established in earlier stages (so I can explain tradeoffs better in interviews if I'm ever asked too).
+### Pytest Benchmarking
 
-Work in this stage includes:
+| Name                | Min (ns)             | Max (ns)                 | Mean (ns)              | StdDev (ns)            | Median (ns)          | IQR (ns)             | Outliers  | OPS (Kops/s) | Rounds  | Iterations |
+| ------------------- | -------------------- | ------------------------ | ---------------------- | ---------------------- | -------------------- | -------------------- | --------- | ------------ | ------- | ---------- |
+| test_get_latency    | 174.3707 (1.0)       | 50,026.2206 (1.0)        | 224.5733 (1.0)         | 126.0082 (1.0)         | 220.6652 (1.0)       | 18.5532 (1.0)        | 2130;3935 | 4,452.8888   | 195,122 | 27         |
+| test_put_latency    | 25,458.9831 (146.00) | 1,790,000.0094 (35.78)   | 214,571.3537 (955.46)  | 387,432.6197 (>1000.0) | 36,625.0169 (165.98) | 10,499.9635 (565.94) | 650;787   | 4.6605       | 3,910   | 1          |
+| test_delete_latency | 29,625.0219 (169.90) | 38,867,915.9805 (776.95) | 257,314.1452 (>1000.0) | 715,234.9094 (>1000.0) | 36,999.9907 (167.67) | 7,583.0030 (408.72)  | 1631;3975 | 3.8863       | 19,786  | 1          |
 
-- Measuring end-to-end latency using a monotonic clock
-- Recording put latency distributions (p50, p95, p99)
-- Measuring get latency under steady state
-- Measuring recovery time as WAL size grows
-- Tracking WAL growth over time relative to checkpoint frequency
-- Comparing fsync-per-write versus batched fsync strategies
-- Explicitly documenting durability assumptions (disk, OS, filesystem)
+Legend:
 
-This stage exists to help inform future optimisations I might do, but we don't make any new design choices.
+- Outliers: 1 Standard Deviation from Mean; 1.5 IQR (InterQuartile Range) from 1st Quartile and 3rd Quartile.
+- OPS: Operations Per Second, computed as 1 / Mean
+
+These tests can be found in tests/test_benchmarking.py
+
+### Latency Percentiles (nanoseconds)
+
+| Operation | p1        | p50       | p99          | Max           | Iterations |
+| --------- | --------- | --------- | ------------ | ------------- | ---------- |
+| GET       | 211 ns    | 229 ns    | 260 ns       | 1,489 ns      | 198,373    |
+| PUT       | 28,208 ns | 37,042 ns | 1,042,404 ns | 1,850,166 ns  | 2,336      |
+| DELETE    | 32,874 ns | 37,833 ns | 3,111,150 ns | 42,740,790 ns | 22,202     |
+
+Total procesing time: around 0.219 seconds
+
+You can see my script that works this out in tests/analyze_benchmarks.py
+
+### My interpretation
+
+As expected, GET operations are very quick and very stable. The median latency is ~230 ns, and the p99 is even still under 300ns. They don't access the JSON file and don't requie disk I/O (via fsync), they only access in-memory storage via `self.data.get(key)`.
+
+However, PUT and DELETE operations are more complex. The median latency is ~37,000 ns for both operations, and the p99 ranges from 1-3ms.
+
+The big jump in time from GET to PUT/DELETE is expected though what with the synchronous nature of the KV store. There's a lot of steps that go into these functions including appending to the WAL, `flush()` and `fsync()` and the checkpointing if needed. As we begin to checkpoint, the time to PUT/DELETE goes up, which would explain the high p99 latency as well as the high Max value for DELETE.
+
+This concludes the project at this point in time. Over time now I will optimise the program and perhaps add things like group commits and possibly background checkpointing.
 
 ## Final note
 
