@@ -24,9 +24,9 @@ Additionally, both reads and writes are synchronised, meaning that they cannot s
 
 ---
 
-## Stages Implemented
+# Stages Implemented
 
-### Stage 0 — In-memory semantics
+## Stage 0 — In-memory semantics
 
 - Data stored entirely in memory
 - Defines stable API semantics:
@@ -39,9 +39,7 @@ Additionally, both reads and writes are synchronised, meaning that they cannot s
 
 This stage exists to lock down **behavioural guarantees** before introducing storage.
 
----
-
-### Stage 1 — Naive full-state persistence
+## Stage 1 — Naive full-state persistence
 
 - Entire in-memory state is serialized to disk after each mutation
 - State is loaded from disk on startup
@@ -50,9 +48,7 @@ This stage exists to lock down **behavioural guarantees** before introducing sto
 
 This stage provides persistence but is **not crash-safe**.
 
----
-
-### Stage 2 — Crash-safe snapshot persistence
+## Stage 2 — Crash-safe snapshot persistence
 
 - Writes are performed to a temporary file, never directly to the main database file
 - Each write is made durable with `flush` + `fsync` before becoming visible
@@ -62,7 +58,7 @@ This stage provides persistence but is **not crash-safe**.
 
 This stage guarantees **atomicity and durability**, but not write ordering or history preservation.
 
-### Stage 3 — Thread-safe, linearizable access
+## Stage 3 — Thread-safe, linearizable access
 
 - All operations (get, put, delete) happen with exclusive ownership of the database
 - Concurrent access behaves as if operations were executed sequentially in some total order
