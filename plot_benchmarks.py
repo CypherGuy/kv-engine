@@ -72,7 +72,7 @@ def plot_latency_cdf(latencies):
 
     plt.xlabel("Latency (nanoseconds, log scale)")
     plt.ylabel("Cumulative probability")
-    plt.title("Latency CDF")
+    plt.title("Latency CDF Graph")
 
     plt.legend()
     plt.tight_layout()
