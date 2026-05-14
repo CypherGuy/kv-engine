@@ -197,3 +197,9 @@ print(db.get("A"))  # None
 - [https://medium.com/@jatinumamtora/a-deep-dive-into-write-ahead-logging-wal-in-database-engines-recovery-71f6d98f0e23](https://medium.com/@jatinumamtora/a-deep-dive-into-write-ahead-logging-wal-in-database-engines-recovery-71f6d98f0e23) and [https://blog.algomaster.io/p/designing-a-distributed-key-value-store](https://blog.algomaster.io/p/designing-a-distributed-key-value-store) to better understand how to use checkpointing/ARIES
 - [https://www.systemdesignhandbook.com/guides/design-a-key-value-store/#2-snapshots-and-checkpointing](https://www.systemdesignhandbook.com/guides/design-a-key-value-store/#2-snapshots-and-checkpointing) to gain a better understanding of how a key-value store is meant to work, including snapshots and checkpointing
 - Pytest docs to learn about using fixtures and pytest-benchmark
+
+---
+
+## License
+
+MIT
